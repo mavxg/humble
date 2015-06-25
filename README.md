@@ -1,15 +1,17 @@
 # humble
-Humble is a simple graph reduction engine. I mean really simple. Basically a list of rules applied to a graph. The rules use the simplest pattern matching algorithm I could think of, naïve translation into `if` statements.
 
-Rules can be applied lazily; top level only and it is upto the rules to reduce their arguments. Or eagarly; apply rules starting at the leaves and working your way up to the root.
+humble is a simple graph reduction engine. I mean really simple. Basically a list of rules applied to a graph. The rules use the simplest pattern matching algorithm I could think of, naïve translation into `if` statements.
+
+Rules can be applied lazily; top level only and it is upto the rules to reduce their arguments. Or eagarly; apply rules starting at the leaf nodes and working your way up to the root.
 
 ## Defining rules
 
-    (Rule (pattern here) result here)
-    (Rule (pattern here) result here)
-    (Rule (pattern) (guard) result body)
+    (Compile
+      (Rule (pattern here) result here)
+      (Rule (pattern here) result here)
+      (Rule (pattern) (guard) result body))
 
-`compile` reduces to a string representing the body of a function. The pattern can be any expression; but some sub expressions have special reserved meanings to facilitate binding.
+`Compile` reduces to a string representing the body of a function. The pattern can be any expression; but some sub expressions have special reserved meanings to facilitate binding.
 
 ## Example
 
@@ -79,6 +81,23 @@ Becomes:
 
 It should use equals whenever there are no Patterns in the sub expression (after splitting off common sub expressions).
 
+## Optimisation (for later - not first cut)
+
+Optimisation can happen at the S-Expr stage by rewritting the expressions.
+
+    (Rule (Call (Symbol Fred)) (Symbol A))
+    (Rule (Call (Symbol Code)) (Symbol B))
+
+Becomes:
+
+    (Rules (Call (Symbol (Blank))) ()
+      (Rule ((Blank) ((Blank) Fred)) (Symbol A))
+      (Rule ((Blank) ((Blank) Code)) (Symbol B))
+
+`Rules` doesn't check length but `Rule` does. Note, the empty expression is for guards.
+
+TODO: Is there a similar optimisation for turning chains of mutually exclusive matches into switch statements?
+
 ## Rule sets can be chained
 
 Internally the rule compiler generates a javascript closure that returns a function:
@@ -96,3 +115,48 @@ Internally the rule compiler generates a javascript closure that returns a funct
     }
 
 Assuming you have a set of rules `base_rule_set` you can make your reduce function by doing `env.reduce = my_rule_set(base_rule_set());`
+
+## Quote/Unquote
+
+`Quote` and `Unquote` behave like the equivalent commands in lisp/scheme. Should we add (`) and (~) to the parser?
+
+Given the following pattern:
+
+    (Rule (Pattern) (Some.Function a b c))
+
+Humble will produce the following code under compilation.
+
+    return Some.Function(a,b,c); //probably env["Some"]["Function"](a,b,c);
+
+If we actually wanted to return:
+
+    return ["Some.Function","a","b","c"];
+
+Then we need to use `Quote`.
+
+    (Rule (Pattern) (Quote (Some.Function a b c)))
+
+And:
+
+    (Rule (Pattern) (Quote (Some.Function (Unquote a) b c)))
+
+Becomes:
+
+    return ["Some.Function",a,"b","c"];
+
+
+Note, this seems to break the lazy by default concept. It seems that the default should be the other way up. That normally we would get the last result. If we want something other than that then we need to tell it to evaluate something. What if the reduction of `(Some.Function a b c)` is `return env["Some"]["Function"](a,b,c)` and if we want that then we tell it to reduce. With that setup we could have:
+
+    (Rule (Pattern captures a) (Some.Function a b c))
+
+Become:
+
+    return ["Some.Function",a,"b","c"];
+
+And we can do:
+
+    (Rule (Pattern captures a) (Reduce (Some.Function a b c)))
+
+If we want:
+
+    return Some.Function(a,"b","c"); //or probably env["Some"]["Function"](a,"b","c");
