@@ -160,3 +160,25 @@ And we can do:
 If we want:
 
     return Some.Function(a,"b","c"); //or probably env["Some"]["Function"](a,"b","c");
+
+Except we should never want this... It will get reduced on the next loop anyway. If we want to reduce something before something else then we should do:
+
+    (Let (a (Before c d e))
+         (After a x y))
+
+So we don't need an explicit reduce because we can do it with Let (which we need to be built in)
+
+##TODO
+
+Either way we need a builtin ruleset that sees `(something ...)` and returns `env["something"](...)` when env["something"] exisits and is a function (otherwise it does nothing). For the rules we are defining in Qube we will be seeing things like:
+
+    (Rule (Pattern capturing a) (Call (Symbol "Something") (Symbol "A")))
+
+So long as we don't define a rule to reduce the call then we get back
+
+    ["Call", ["Symbol","Something"], a];
+
+What else do we need if we want to combine a bunch of rules together? Can we do it with let and some form of join?
+
+
+ 
